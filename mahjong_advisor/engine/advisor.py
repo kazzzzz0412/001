@@ -12,9 +12,17 @@ from typing import Sequence
 from mahjong.shanten import Shanten
 from mahjong.tile import TilesConverter
 
+from mahjong_advisor.engine import pushfold
+from mahjong_advisor.engine.danger import DangerReport, assess, safe_tile_summary
 from mahjong_advisor.engine.names import tile_name, tile_notation
+from mahjong_advisor.engine.pushfold import PushFoldVerdict
+from mahjong_advisor.engine.table import TableState
 
 HandLike = str | Sequence[int]
+
+STANCE_AUTO = "auto"
+STANCE_PUSH = "push"
+STANCE_FOLD = "fold"
 
 
 def _to_34(hand: HandLike) -> list[int]:
@@ -37,6 +45,18 @@ class DiscardOption:
     """Number of distinct accepting tile types (classic 'ukeire' count)."""
     ukeire_live: int = 0
     """Sum of remaining live copies of accepting tiles, given visible tiles."""
+    danger: DangerReport | None = None
+    """Deal-in risk, present only when someone at the table is threatening."""
+    ev: float | None = None
+    """Expected points from pushing this tile, when danger is being weighed."""
+
+    @property
+    def danger_percent(self) -> float:
+        return self.danger.percent if self.danger else 0.0
+
+    @property
+    def danger_reason(self) -> str:
+        return self.danger.reason if self.danger else "-"
 
     @property
     def tenpai(self) -> bool:
@@ -63,6 +83,15 @@ class HandAnalysis:
     """Only populated for 14-tile hands, best option first."""
     waits: list[int] = field(default_factory=list)
     """Only populated for a 13-tile hand that is already tenpai."""
+    push_fold: PushFoldVerdict | None = None
+    """Push-or-fold call, present only when someone is threatening."""
+    stance: str = STANCE_AUTO
+    safe_tiles: dict[str, list[str]] = field(default_factory=dict)
+    """Per-opponent list of tiles in hand that are 100% safe against them."""
+
+    @property
+    def under_threat(self) -> bool:
+        return self.push_fold is not None
 
     @property
     def is_tenpai(self) -> bool:
@@ -79,7 +108,13 @@ class HandAnalysis:
 class Advisor:
     """Computes shanten/ukeire-ranked discard suggestions for a hand."""
 
-    def analyze(self, hand: HandLike, visible: HandLike | None = None) -> HandAnalysis:
+    def analyze(
+        self,
+        hand: HandLike,
+        visible: HandLike | None = None,
+        table: TableState | None = None,
+        stance: str = STANCE_AUTO,
+    ) -> HandAnalysis:
         hand_34 = _to_34(hand)
         hand_size = sum(hand_34)
         if hand_size not in (13, 14):
@@ -88,22 +123,94 @@ class Advisor:
             if c > 4:
                 raise ValueError(f"Tile {tile_notation(i)} appears {c} times (max 4).")
 
-        visible_34 = _to_34(visible) if visible is not None else [0] * 34
+        if table is not None:
+            visible_34 = table.board_visible_34()
+        elif visible is not None:
+            visible_34 = _to_34(visible)
+        else:
+            visible_34 = [0] * 34
 
         base_shanten = Shanten.calculate_shanten(hand_34)
 
         if hand_size == 14:
             if base_shanten == Shanten.AGARI_STATE:
                 return HandAnalysis(hand_size=hand_size, shanten=base_shanten, is_agari=True)
+
             options = self._rank_discards(hand_34, visible_34)
+            under_threat = table is not None and table.has_threat
+            verdict = None
+            safe_tiles: dict[str, list[str]] = {}
+
+            if under_threat:
+                self._attach_danger(options, hand_34, table)
+                verdict = self._resolve_push_fold(options, table)
+                safe_tiles = safe_tile_summary(table, hand_34)
+                self._sort_with_danger(options, stance, verdict)
+
             best_shanten = options[0].shanten_after if options else base_shanten
-            return HandAnalysis(hand_size=hand_size, shanten=best_shanten, discard_options=options)
+            return HandAnalysis(
+                hand_size=hand_size,
+                shanten=min(o.shanten_after for o in options) if options else best_shanten,
+                discard_options=options,
+                push_fold=verdict,
+                stance=stance,
+                safe_tiles=safe_tiles,
+            )
 
         # 13-tile hand: report current shanten, and waits if already tenpai.
         waits: list[int] = []
         if base_shanten == Shanten.TENPAI_STATE:
             waits = self._accepting_tiles(hand_34, base_shanten)
         return HandAnalysis(hand_size=hand_size, shanten=base_shanten, waits=waits)
+
+    # -- danger / push-fold -------------------------------------------------
+    @staticmethod
+    def _attach_danger(
+        options: list[DiscardOption], hand_34: list[int], table: TableState
+    ) -> None:
+        has_riichi = any(o.is_riichi for o in table.threatening_opponents())
+        for option in options:
+            option.danger = assess(option.tile, table, hand_34)
+            option.ev = pushfold.push_ev(
+                shanten=option.shanten_after,
+                ukeire_live=option.ukeire_live,
+                turn=table.turn,
+                this_tile_risk=option.danger.probability,
+                has_riichi=has_riichi,
+            )
+
+    @staticmethod
+    def _resolve_push_fold(options: list[DiscardOption], table: TableState) -> PushFoldVerdict:
+        best_ev = max(o.ev for o in options if o.ev is not None)
+        safest = min(options, key=lambda o: o.danger_percent)
+        has_riichi = any(o.is_riichi for o in table.threatening_opponents())
+        best_shanten = min(o.shanten_after for o in options)
+
+        ev_fold = pushfold.fold_ev(
+            safest_tile_risk=safest.danger.probability if safest.danger else 0.0,
+            shanten=best_shanten,
+            turn=table.turn,
+            has_riichi=has_riichi,
+        )
+        return pushfold.decide(
+            best_ev, ev_fold, safe_tile_available=safest.danger_percent <= 0.0
+        )
+
+    @staticmethod
+    def _sort_with_danger(
+        options: list[DiscardOption], stance: str, verdict: PushFoldVerdict
+    ) -> None:
+        if stance == STANCE_PUSH:
+            return  # already ranked by pure efficiency
+
+        folding = stance == STANCE_FOLD or (
+            stance == STANCE_AUTO and verdict.verdict == pushfold.FOLD
+        )
+        if folding:
+            # Safety first; among equally safe tiles keep the better hand.
+            options.sort(key=lambda o: (o.danger_percent, o.shanten_after, -o.ukeire_live))
+        else:
+            options.sort(key=lambda o: (-(o.ev or 0.0), o.danger_percent))
 
     @staticmethod
     def _accepting_tiles(hand_34: list[int], base_shanten: int) -> list[int]:
