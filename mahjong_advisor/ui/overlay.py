@@ -17,6 +17,7 @@ from mahjong_advisor.session import AdvisorSession
 
 DEFAULT_FOCUS_HOTKEY = "<ctrl>+<alt>+h"
 DEFAULT_RESET_HOTKEY = "<ctrl>+<alt>+r"
+DEFAULT_READ_HOTKEY = "<ctrl>+<alt>+m"
 
 _HINT = "手牌 or コマンド (help)"
 
@@ -26,6 +27,7 @@ class OverlayApp:
         self,
         focus_hotkey: str = DEFAULT_FOCUS_HOTKEY,
         reset_hotkey: str = DEFAULT_RESET_HOTKEY,
+        read_hotkey: str = DEFAULT_READ_HOTKEY,
         geometry: str = "+40+40",
     ) -> None:
         self.session = AdvisorSession()
@@ -56,7 +58,7 @@ class OverlayApp:
 
         self.status = tk.Label(
             frame,
-            text=f"フォーカス: {focus_hotkey}   リセット: {reset_hotkey}",
+            text=f"画面読取: {read_hotkey}   フォーカス: {focus_hotkey}   リセット: {reset_hotkey}",
             fg="#888888",
             bg="#1e1e1e",
             font=(mono.actual("family"), 8),
@@ -80,6 +82,7 @@ class OverlayApp:
         self._hotkey_listener = None
         self._focus_hotkey = focus_hotkey
         self._reset_hotkey = reset_hotkey
+        self._read_hotkey = read_hotkey
 
     # -- hotkey wiring -----------------------------------------------------
     def start_global_hotkeys(self) -> None:
@@ -92,6 +95,7 @@ class OverlayApp:
         bindings = {
             self._focus_hotkey: self._request_focus,
             self._reset_hotkey: self._request_reset,
+            self._read_hotkey: self._request_screen_read,
         }
         self._hotkey_listener = keyboard.GlobalHotKeys(bindings)
         self._hotkey_listener.daemon = True
@@ -104,6 +108,9 @@ class OverlayApp:
     def _request_reset(self) -> None:
         self._ui_queue.put("reset")
 
+    def _request_screen_read(self) -> None:
+        self._ui_queue.put("read")
+
     def _drain_ui_queue(self) -> None:
         try:
             while True:
@@ -112,9 +119,26 @@ class OverlayApp:
                     self._grab_focus()
                 elif action == "reset":
                     self._show(self.session.handle("reset"))
+                elif action == "read":
+                    self.read_screen()
         except queue.Empty:
             pass
         self.root.after(50, self._drain_ui_queue)
+
+    def read_screen(self) -> None:
+        """Capture the table, update state and show the advice - the whole turn
+        handled by one keystroke."""
+        try:
+            from mahjong_advisor.config import VisionConfig
+            from mahjong_advisor.vision.runner import read_table
+        except ImportError as exc:
+            self._show(f"画面認識の依存関係が未導入です: {exc}", error=True)
+            return
+
+        try:
+            self._show(read_table(self.session, VisionConfig.load()))
+        except Exception as exc:  # noqa: BLE001 - keep the overlay alive
+            self._show(f"エラー: {exc}", error=True)
 
     def _grab_focus(self) -> None:
         self.root.deiconify()

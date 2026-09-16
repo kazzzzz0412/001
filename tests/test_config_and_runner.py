@@ -1,7 +1,4 @@
-import pytest
-
 from mahjong_advisor.config import CaptureRegion, VisionConfig
-from mahjong_advisor.vision.runner import analyze_screen_once
 
 
 def test_vision_config_roundtrip(tmp_path):
@@ -27,16 +24,5 @@ def test_vision_config_load_missing_file_returns_defaults(tmp_path):
     assert config.tile_count == 14
 
 
-def test_analyze_screen_once_without_calibration_raises():
-    config = VisionConfig(hand_region=None)
-    with pytest.raises(RuntimeError, match="キャリブレーション未実施"):
-        analyze_screen_once(config)
-
-
-def test_analyze_screen_once_without_templates_raises(tmp_path):
-    config = VisionConfig(
-        hand_region=CaptureRegion(left=0, top=0, width=100, height=50),
-        templates_dir=str(tmp_path / "empty_templates"),
-    )
-    with pytest.raises(RuntimeError, match="テンプレートが空"):
-        analyze_screen_once(config)
+# Screen-read behaviour, including the uncalibrated error paths, is covered in
+# tests/test_vision_table.py against the read_table pipeline.

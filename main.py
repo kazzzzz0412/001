@@ -3,7 +3,7 @@
   python main.py              manual hand-input REPL (no setup required)
   python main.py overlay      always-on-top overlay with a global hotkey
   python main.py calibrate    [experimental] set up screen-vision templates
-  python main.py vision       [experimental] read your hand from the screen once
+  python main.py vision       [experimental] read hand + discard piles once
   python main.py vision --watch   same, re-triggered by a global hotkey
 """
 
@@ -18,8 +18,10 @@ def main() -> None:
 
     sub.add_parser("cli", help="manual hand-input REPL (default)")
     sub.add_parser("overlay", help="always-on-top overlay with a global hotkey")
-    sub.add_parser("calibrate", help="[experimental] set up screen-vision capture region + tile templates")
-    vision_parser = sub.add_parser("vision", help="[experimental] read your hand from the screen")
+    sub.add_parser("calibrate", help="[experimental] set up screen-vision regions + tile templates")
+    vision_parser = sub.add_parser(
+        "vision", help="[experimental] read your hand and the discard piles from the screen"
+    )
     vision_parser.add_argument(
         "--watch", action="store_true", help="stay running and re-capture on a hotkey instead of once"
     )
