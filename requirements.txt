@@ -1,0 +1,13 @@
+# Core (needed for `python main.py cli` — no other setup required)
+mahjong>=2.0.0
+
+# Overlay mode (`python main.py overlay`) and the vision hotkey mode
+pynput>=1.7.6
+
+# Experimental screen-vision mode (`python main.py calibrate` / `vision`)
+mss>=9.0.1
+opencv-python>=4.8.0
+numpy>=1.24.0
+
+# Tests
+pytest>=7.4.0
