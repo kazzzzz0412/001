@@ -11,3 +11,6 @@ numpy>=1.24.0
 
 # Tests
 pytest>=7.4.0
+
+# Screenshot marker tool (`python -m card_grade_marker`)
+Pillow>=10.0.0

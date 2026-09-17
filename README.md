@@ -256,3 +256,10 @@ pytest
   ッチングで手牌と河を認識（`recognizer.py`）、読み取った河を既存の履歴と
   部分列アラインメントして差分だけ追記（`sync.py`）、それをエンジンに渡して
   解析まで通します（`runner.py`）。
+
+## 同梱の別ツール
+
+- `card_grade_marker/` — PSA鑑定分布データのスクリーンショットから、該当グレー
+  ド以外のチップを消して1つだけを矢印で示す画像加工ツールです。麻雀アドバイザー
+  とは独立して動きます。詳細は [card_grade_marker/README.md](card_grade_marker/README.md)。
+
