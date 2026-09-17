@@ -24,6 +24,8 @@ def make_screenshot(chip_count=5, selected=1, heading=True, width=1290, height=1
         for i in range(6):
             x = 60 + i * 46
             draw.rectangle((x, 560 + (i % 3) * 6, x + 38, 604 - (i % 2) * 8), fill=LABEL)
+        # A lone rounded box (the grade dropdown) sits on the same line.
+        draw.rounded_rectangle((700, 540, 1230, 620), radius=40, fill=(48, 48, 48))
 
     for i in range(chip_count):
         x0 = FIRST_LEFT + i * CHIP_PITCH
@@ -145,6 +147,46 @@ def test_band_override_is_used_as_given():
     row = detect_chip_row(make_screenshot(), band=(CHIP_TOP, CHIP_BOTTOM))
     assert (row.y0, row.y1) == (CHIP_TOP, CHIP_BOTTOM)
     assert len(row.chips) == 5
+
+
+def test_a_row_of_chips_beats_a_lone_rounded_box():
+    # The dropdown above the row is a bordered box too, but it is on its own.
+    row = detect_chip_row(make_screenshot())
+    assert len(row.chips) == 5
+    assert row.y0 > 640
+
+
+def test_a_single_chip_row_is_still_found():
+    # What is left after this tool has marked a screenshot once.
+    row = detect_chip_row(make_screenshot(chip_count=1, selected=0, heading=False))
+    assert len(row.chips) == 1
+    assert row.chips[0].selected is True
+
+
+def test_chip_override_keeps_the_given_columns():
+    image = make_screenshot()
+    x0, x1 = 600, 700
+    result, row, index = highlight_grade(image, chip=(x0, x1))
+
+    assert index == 0
+    assert (row.chips[0].x0, row.chips[0].x1) == (x0, x1)
+    before = np.asarray(image)
+    after = np.asarray(result)
+    kept = (slice(row.y0, row.y1 + 1), slice(x0, x1 + 1))
+    assert np.array_equal(after[kept], before[kept])
+
+
+def test_padding_can_differ_top_and_bottom():
+    image = make_screenshot()
+    draw = ImageDraw.Draw(image)
+    draw.rectangle((0, CHIP_TOP - 20, 200, CHIP_TOP - 16), fill=LABEL)
+    draw.rectangle((0, CHIP_BOTTOM + 16, 200, CHIP_BOTTOM + 20), fill=LABEL)
+
+    result, _, _ = highlight_grade(image, style=MarkerStyle(pad=(40, 5)))
+    after = np.asarray(result)
+
+    assert not (after[CHIP_TOP - 20 : CHIP_TOP - 15] == LABEL).all(axis=2).any()
+    assert (after[CHIP_BOTTOM + 16 : CHIP_BOTTOM + 21] == LABEL).all(axis=2).any()
 
 
 def test_band_override_accepts_a_row_with_one_chip():

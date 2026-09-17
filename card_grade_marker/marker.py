@@ -34,6 +34,8 @@ MIN_CHIP_HEIGHT = 60
 MAX_CHIP_HEIGHT = 500
 # Chips narrower than this are noise, not chips.
 MIN_CHIP_WIDTH = 40
+# Score given to a band holding a single chip; a real row always beats it.
+LONE_CHIP_SCORE = 0.5
 # Supersampling factor used when drawing the arrow, for clean diagonal edges.
 SUPERSAMPLE = 4
 
@@ -89,7 +91,9 @@ class MarkerStyle:
     fill_color: tuple[int, int, int] | None = None  # None -> sampled background
     side: str = "auto"  # auto | left | right
     ring: bool = False
-    pad: int | None = None  # extra rows blacked out above/below the chip row
+    # Extra rows erased above and below the chip row: one number for both,
+    # or (top, bottom).
+    pad: int | tuple[int, int] | None = None
     # Arrow geometry, as multiples of the chip height.
     gap_ratio: float = 0.10
     head_length_ratio: float = 0.52
@@ -214,8 +218,12 @@ def _spread(values: Sequence[float]) -> float:
 
 def _band_score(columns: Sequence[tuple[int, int]]) -> float:
     """How much a band looks like a row of equally sized, equally spaced chips."""
-    if len(columns) < 2:
+    if not columns:
         return 0.0
+    if len(columns) == 1:
+        # A row scrolled down to one chip, or one this tool has already marked.
+        # Worth keeping, but any real row of chips should outrank it.
+        return LONE_CHIP_SCORE
     widths = [c[1] - c[0] + 1 for c in columns]
     # The chip at the right edge is usually clipped by the edge of the screen.
     full = widths[:-1] if len(widths) > 2 else widths
@@ -339,9 +347,14 @@ def render_highlight(image: Image.Image, row: ChipRow, target: int, style: Marke
     out = image.convert("RGB").copy()
     width, height = out.size
 
-    pad = style.pad if style.pad is not None else max(2, round(row.height * 0.02))
-    band_top = max(0, row.y0 - pad)
-    band_bottom = min(height - 1, row.y1 + pad)
+    if style.pad is None:
+        pad_top = pad_bottom = max(2, round(row.height * 0.02))
+    elif isinstance(style.pad, tuple):
+        pad_top, pad_bottom = style.pad
+    else:
+        pad_top = pad_bottom = style.pad
+    band_top = max(0, row.y0 - pad_top)
+    band_bottom = min(height - 1, row.y1 + pad_bottom)
     fill = style.fill_color if style.fill_color is not None else row.background
 
     keep = image.convert("RGB").crop(
@@ -377,19 +390,43 @@ def render_highlight(image: Image.Image, row: ChipRow, target: int, style: Marke
     return out
 
 
+def _row_with_single_chip(
+    image: Image.Image, row: ChipRow, span: tuple[int, int]
+) -> ChipRow:
+    """Replace a detected row's chips with one chip covering ``span``."""
+    x0, x1 = span
+    if x1 <= x0:
+        raise ValueError("chip columns must be given as X0:X1 with X1 greater than X0")
+    lum = np.asarray(image.convert("RGB")).astype(np.int16).mean(axis=2)
+    chip = Chip(
+        x0=x0,
+        x1=x1,
+        y0=row.y0,
+        y1=row.y1,
+        selected=_is_selected(lum, x0, x1, row.y0, row.y1),
+    )
+    return ChipRow(y0=row.y0, y1=row.y1, chips=(chip,), background=row.background)
+
+
 def highlight_grade(
     image: Image.Image,
     target: int | None = None,
     style: MarkerStyle | None = None,
     band: tuple[int, int] | None = None,
+    chip: tuple[int, int] | None = None,
 ) -> tuple[Image.Image, ChipRow, int]:
     """Detect the chip row and highlight one chip.
 
     ``target`` is a 0-based index from the left; ``None`` uses the chip the app
-    itself has selected (the one with the white border).
+    itself has selected (the one with the white border). ``chip`` names the kept
+    chip's columns outright, for screenshots where something overlaps a chip and
+    the two are read as one.
     """
     style = style or MarkerStyle()
     row = detect_chip_row(image, band=band)
+    if chip is not None:
+        row = _row_with_single_chip(image, row, chip)
+        return render_highlight(image, row, 0, style), row, 0
     if target is None:
         target = row.selected_index()
         if target is None:

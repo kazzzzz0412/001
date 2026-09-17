@@ -31,14 +31,37 @@ def _parse_color(value: str) -> tuple[int, int, int]:
         raise argparse.ArgumentTypeError(f"unrecognised colour: {value}") from exc
 
 
-def _parse_band(value: str) -> tuple[int, int]:
+def _parse_span(value: str, flag: str, axis: str) -> tuple[int, int]:
     try:
-        y0, y1 = (int(part) for part in value.split(":", 1))
+        low, high = (int(part) for part in value.split(":", 1))
     except ValueError as exc:
-        raise argparse.ArgumentTypeError("--band expects Y0:Y1, e.g. 1654:1875") from exc
-    if y1 <= y0:
-        raise argparse.ArgumentTypeError("--band expects Y0:Y1 with Y1 greater than Y0")
-    return y0, y1
+        raise argparse.ArgumentTypeError(f"{flag} expects {axis}0:{axis}1") from exc
+    if high <= low:
+        raise argparse.ArgumentTypeError(
+            f"{flag} expects {axis}0:{axis}1 with {axis}1 greater than {axis}0"
+        )
+    return low, high
+
+
+def _parse_band(value: str) -> tuple[int, int]:
+    return _parse_span(value, "--band", "Y")
+
+
+def _parse_pad(value: str) -> int | tuple[int, int]:
+    parts = value.split(":")
+    try:
+        numbers = [int(part) for part in parts]
+    except ValueError as exc:
+        raise argparse.ArgumentTypeError("--pad expects N or TOP:BOTTOM") from exc
+    if len(numbers) == 1:
+        return numbers[0]
+    if len(numbers) == 2:
+        return numbers[0], numbers[1]
+    raise argparse.ArgumentTypeError("--pad expects N or TOP:BOTTOM")
+
+
+def _parse_chip(value: str) -> tuple[int, int]:
+    return _parse_span(value, "--chip", "X")
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -68,6 +91,14 @@ def build_parser() -> argparse.ArgumentParser:
         help="force the chip row to rows Y0:Y1 instead of detecting it",
     )
     parser.add_argument(
+        "--chip",
+        type=_parse_chip,
+        help=(
+            "keep the columns X0:X1 instead of a detected chip, for when "
+            "something overlapping a chip is read as part of it"
+        ),
+    )
+    parser.add_argument(
         "--side",
         choices=("auto", "left", "right"),
         default="auto",
@@ -85,7 +116,9 @@ def build_parser() -> argparse.ArgumentParser:
         help="colour used to erase the other chips: 'bg' to match the page, or a colour",
     )
     parser.add_argument(
-        "--pad", type=int, help="extra rows erased above and below the chip row"
+        "--pad",
+        type=_parse_pad,
+        help="extra rows erased above and below the chip row: N, or TOP:BOTTOM",
     )
     parser.add_argument(
         "--ring", action="store_true", help="also draw a ring around the kept chip"
@@ -141,7 +174,9 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     try:
-        result, row, index = highlight_grade(image, target=target, style=style, band=args.band)
+        result, row, index = highlight_grade(
+            image, target=target, style=style, band=args.band, chip=args.chip
+        )
     except (ValueError, IndexError) as exc:
         print(f"error: {exc}", file=sys.stderr)
         return 1
