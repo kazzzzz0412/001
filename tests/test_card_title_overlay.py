@@ -33,7 +33,7 @@ def make_photo(width=2576, height=1932, label=True, art=(ART_TOP, ART_BOTTOM)):
 
 def test_split_title_puts_the_subject_in_the_middle():
     lines = split_title("希少 カイリキー 進化系 eカード 3連番 セット")
-    assert lines == TitleLines(top="希少", main="カイリキー進化系", bottom="eカード 3連番 セット")
+    assert lines == TitleLines(top="希少", main="カイリキー 進化系", bottom="eカード 3連番 セット")
 
 
 @pytest.mark.parametrize(
@@ -47,6 +47,35 @@ def test_split_title_puts_the_subject_in_the_middle():
 )
 def test_split_title_shorter_titles(title, expected):
     assert split_title(title) == expected
+
+
+def test_a_space_opens_a_wider_gap_than_plain_characters():
+    from card_title_overlay.overlay import _line_image
+
+    style = TitleStyle()
+    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
+    solid = _line_image("カイリキー進化系", 120, font, style)
+    spaced = _line_image("カイリキー 進化系", 120, font, style)
+    assert spaced.width > solid.width + round(120 * style.tracking_ratio)
+
+
+@pytest.mark.parametrize("character", ["イ", "國", "ー"])
+def test_characters_sit_one_tracking_apart_whatever_their_width(character):
+    # Spacing goes by ink, not by advance width: doubling a character adds its
+    # own ink plus one gap, for a narrow katakana exactly as for a wide kanji.
+    from card_title_overlay.overlay import _line_image
+
+    size = 120
+    style = TitleStyle()
+    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
+    edge = round(size * style.weight_ratio) + round(size * style.outline_ratio)
+    one = _line_image(character, size, font, style)
+    two = _line_image(character * 2, size, font, style)
+
+    grown = two.width - one.width
+    assert grown == pytest.approx(
+        one.width - 2 * edge + round(size * style.tracking_ratio), abs=2
+    )
 
 
 def test_artwork_band_is_the_card_faces_not_the_label():
@@ -150,7 +179,7 @@ def test_cli_show_reports_the_layout(tmp_path, capsys):
 
     assert main([str(source), "希少 カイリキー 進化系 セット", "--show"]) == 0
     out = capsys.readouterr().out
-    assert "main:   'カイリキー進化系'" in out
+    assert "main:   'カイリキー 進化系'" in out
 
 
 def test_cli_reports_a_photo_it_cannot_read(tmp_path, capsys):

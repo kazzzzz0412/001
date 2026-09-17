@@ -62,16 +62,19 @@ class TitleStyle:
     # dense kanji fill in, so a genuinely heavy font wants a lower value here.
     weight_ratio: float = 0.035
     # Red outline thickness, as a fraction of the font size.
-    outline_ratio: float = 0.105
-    # Space added between characters, as a fraction of the font size. Without it
-    # the outlines of neighbouring glyphs merge into one blob.
-    tracking_ratio: float = 0.16
+    outline_ratio: float = 0.145
+    # Gap between the INK of neighbouring characters, as a fraction of the font
+    # size. Spacing by ink rather than by advance keeps katakana, which sits
+    # well inside its em box, from drifting apart from the kanji next to it.
+    tracking_ratio: float = 0.07
+    # Gap where the title had a space, as a fraction of the font size.
+    word_gap_ratio: float = 0.34
     # Widest each line may be, as a fraction of the photo width.
     main_width: float = 0.92
     top_width: float = 0.40
     bottom_width: float = 0.90
     # Tallest each line may be, as a fraction of the photo height.
-    main_cap: float = 0.135
+    main_cap: float = 0.150
     top_cap: float = 0.072
     bottom_cap: float = 0.115
     # Gaps: from the artwork, between the two top lines, and from the edges.
@@ -85,7 +88,8 @@ def split_title(title: str) -> TitleLines:
 
     The main line is what the listing is about, so it takes the middle words and
     is drawn largest; the first word becomes a small tag above it and whatever
-    is left runs along the bottom.
+    is left runs along the bottom. Words keep their spaces, which are drawn
+    wider than the gap between characters.
     """
     words = title.split()
     if not words:
@@ -96,7 +100,7 @@ def split_title(title: str) -> TitleLines:
         return TitleLines(main=words[0], bottom=words[1])
     if len(words) == 3:
         return TitleLines(top=words[0], main=words[1], bottom=words[2])
-    return TitleLines(top=words[0], main="".join(words[1:3]), bottom=" ".join(words[3:]))
+    return TitleLines(top=words[0], main=" ".join(words[1:3]), bottom=" ".join(words[3:]))
 
 
 def find_font(preferred: str | None = None) -> str:
@@ -158,21 +162,34 @@ def _ink(
     weight: int,
     outline: int,
     tracking: int,
+    word_gap: int,
     style: TitleStyle,
 ) -> Image.Image:
     """One line of text, cropped to its own ink.
 
-    Characters are placed one at a time so they can be spaced out: at this
-    outline thickness, glyphs set solid would run together into a red blob. The
+    Characters are placed one at a time, each a fixed gap from the ink of the
+    one before it: set solid they would run together at this outline thickness,
+    and spaced by advance width the narrow katakana would drift apart. The
     outlines are all drawn first, then the fills, so no outline crosses the
     letter before it.
     """
-    offsets: list[float] = []
-    x = 0.0
+    placements: list[tuple[str, float]] = []
+    cursor = 0.0
     for character in text:
-        offsets.append(x)
-        x += font.getlength(character) + tracking
-    line_width = max(0.0, x - tracking)
+        if character.isspace():
+            cursor += word_gap - tracking
+            continue
+        # getbbox reports the layout box, so the ink itself is measured from a
+        # rendered mask: that is what the gap is counted from.
+        ink = font.getmask(character, mode="L").getbbox()
+        if ink is None:  # a glyph with no ink of its own
+            cursor += font.getlength(character) + tracking
+            continue
+        left, right = ink[0], ink[2]
+        draw_x = cursor - left
+        placements.append((character, draw_x))
+        cursor = draw_x + right + tracking
+    line_width = max(0.0, cursor - tracking)
 
     ascent, descent = font.getmetrics()
     pad = weight + outline + 8
@@ -186,7 +203,7 @@ def _ink(
         (style.outline, weight + outline),
         (style.fill, weight),
     ):
-        for character, offset in zip(text, offsets):
+        for character, offset in placements:
             draw.text(
                 (pad + offset, pad),
                 character,
@@ -206,7 +223,8 @@ def _line_image(
     weight = round(size * style.weight_ratio)
     outline = round(size * style.outline_ratio)
     tracking = round(size * style.tracking_ratio)
-    return _ink(text, font, weight, outline, tracking, style)
+    word_gap = round(size * style.word_gap_ratio)
+    return _ink(text, font, weight, outline, tracking, word_gap, style)
 
 
 def _fit_size(

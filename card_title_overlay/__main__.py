@@ -75,7 +75,13 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tracking",
         type=float,
-        help="space between characters, as a fraction of the font size (default: 0.16)",
+        help="gap between characters, as a fraction of the font size (default: 0.07)",
+    )
+    parser.add_argument(
+        "--word-gap",
+        type=float,
+        dest="word_gap",
+        help="gap where the title had a space, as a fraction of the font size (default: 0.34)",
     )
     parser.add_argument(
         "--band",
@@ -132,6 +138,8 @@ def main(argv: list[str] | None = None) -> int:
         style.weight_ratio = args.weight
     if args.tracking is not None:
         style.tracking_ratio = args.tracking
+    if args.word_gap is not None:
+        style.word_gap_ratio = args.word_gap
     try:
         result, lines, band = add_title(
             image, title, style=style, font=args.font, band=args.band
