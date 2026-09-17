@@ -4,3 +4,9 @@ __pycache__/
 templates/
 *.egg-info/
 .venv/
+
+# Inventory mode: local setup, saved reads, and Google service-account keys
+inventory.json
+read.json
+service-account*.json
+*-credentials.json

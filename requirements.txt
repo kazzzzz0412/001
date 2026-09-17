@@ -11,3 +11,11 @@ numpy>=1.24.0
 
 # Tests
 pytest>=7.4.0
+
+# Inventory sheet auto-fill (`python main.py inventory`)
+anthropic>=1.0.0
+openpyxl>=3.1.0
+
+# Only for `--target sheet:` (Google Sheets); not needed for local .xlsx
+google-api-python-client>=2.100.0
+google-auth>=2.23.0

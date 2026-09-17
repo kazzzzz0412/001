@@ -5,14 +5,23 @@
   python main.py calibrate    [experimental] set up screen-vision templates
   python main.py vision       [experimental] read hand + discard piles once
   python main.py vision --watch   same, re-triggered by a global hotkey
+  python main.py inventory    fill a spreadsheet from photos of handwritten stock stickers
 """
 
 from __future__ import annotations
 
 import argparse
+import sys
 
 
 def main() -> None:
+    # `inventory` owns its own flags, so hand it the raw argv before argparse
+    # sees them - argparse.REMAINDER drops leading options like `--images`.
+    if sys.argv[1:2] == ["inventory"]:
+        from inventory_filler.cli import run
+
+        raise SystemExit(run(sys.argv[2:]))
+
     parser = argparse.ArgumentParser(description="Mahjong discard advisor (efficiency assistant, no autoplay)")
     sub = parser.add_subparsers(dest="mode")
 
@@ -24,6 +33,10 @@ def main() -> None:
     )
     vision_parser.add_argument(
         "--watch", action="store_true", help="stay running and re-capture on a hotkey instead of once"
+    )
+    # Listed so it shows in --help; its arguments are handled above.
+    sub.add_parser(
+        "inventory", help="fill a spreadsheet from photos of handwritten stock stickers"
     )
 
     args = parser.parse_args()
