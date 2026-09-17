@@ -75,7 +75,15 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--tracking",
         type=float,
-        help="gap between characters, as a fraction of the font size (default: 0.07)",
+        help="gap between characters, as a fraction of the font size (default: 0.05)",
+    )
+    parser.add_argument(
+        "--bearing",
+        type=float,
+        help=(
+            "how much of a font's own side margins to keep, 0 to 1 "
+            "(default: 0.45; 0 spaces purely by ink, 1 by advance width)"
+        ),
     )
     parser.add_argument(
         "--word-gap",
@@ -138,6 +146,8 @@ def main(argv: list[str] | None = None) -> int:
         style.weight_ratio = args.weight
     if args.tracking is not None:
         style.tracking_ratio = args.tracking
+    if args.bearing is not None:
+        style.bearing_ratio = args.bearing
     if args.word_gap is not None:
         style.word_gap_ratio = args.word_gap
     try:

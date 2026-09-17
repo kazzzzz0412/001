@@ -61,12 +61,13 @@ def test_a_space_opens_a_wider_gap_than_plain_characters():
 
 @pytest.mark.parametrize("character", ["イ", "國", "ー"])
 def test_characters_sit_one_tracking_apart_whatever_their_width(character):
-    # Spacing goes by ink, not by advance width: doubling a character adds its
-    # own ink plus one gap, for a narrow katakana exactly as for a wide kanji.
+    # With the font's own margins dropped, spacing goes by ink rather than by
+    # advance width: doubling a character adds its own ink plus one gap, for a
+    # narrow katakana exactly as for a wide kanji.
     from card_title_overlay.overlay import _line_image
 
     size = 120
-    style = TitleStyle()
+    style = TitleStyle(bearing_ratio=0.0)
     font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
     edge = round(size * style.weight_ratio) + round(size * style.outline_ratio)
     one = _line_image(character, size, font, style)
@@ -76,6 +77,23 @@ def test_characters_sit_one_tracking_apart_whatever_their_width(character):
     assert grown == pytest.approx(
         one.width - 2 * edge + round(size * style.tracking_ratio), abs=2
     )
+
+
+def test_keeping_some_side_margin_gives_narrow_characters_more_air():
+    # A katakana carries wider blank margins than a kanji, so the share of them
+    # that is kept opens it up more - which is what stops it reading tighter.
+    from card_title_overlay.overlay import _line_image
+
+    size = 120
+    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
+
+    def added(character: str, bearing: float) -> int:
+        style = TitleStyle(bearing_ratio=bearing)
+        one = _line_image(character, size, font, style)
+        two = _line_image(character * 2, size, font, style)
+        return (two.width - one.width) - one.width
+
+    assert added("イ", 0.45) - added("イ", 0.0) > added("國", 0.45) - added("國", 0.0)
 
 
 def test_artwork_band_is_the_card_faces_not_the_label():

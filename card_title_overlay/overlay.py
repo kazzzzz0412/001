@@ -66,7 +66,11 @@ class TitleStyle:
     # Gap between the INK of neighbouring characters, as a fraction of the font
     # size. Spacing by ink rather than by advance keeps katakana, which sits
     # well inside its em box, from drifting apart from the kanji next to it.
-    tracking_ratio: float = 0.07
+    tracking_ratio: float = 0.05
+    # How much of the blank margin a font leaves on each side of a character to
+    # keep. 0 spaces purely by ink, 1 is the font's own advance width; narrow
+    # katakana need some of it back or they read tighter than the kanji.
+    bearing_ratio: float = 0.45
     # Gap where the title had a space, as a fraction of the font size.
     word_gap_ratio: float = 0.34
     # Widest each line may be, as a fraction of the photo width.
@@ -79,7 +83,7 @@ class TitleStyle:
     bottom_cap: float = 0.115
     # Gaps: from the artwork, between the two top lines, and from the edges.
     art_gap: float = 0.020
-    line_gap: float = 0.022
+    line_gap: float = 0.014
     side_margin: float = 0.06
 
 
@@ -163,32 +167,39 @@ def _ink(
     outline: int,
     tracking: int,
     word_gap: int,
+    bearing: float,
     style: TitleStyle,
 ) -> Image.Image:
     """One line of text, cropped to its own ink.
 
-    Characters are placed one at a time, each a fixed gap from the ink of the
-    one before it: set solid they would run together at this outline thickness,
-    and spaced by advance width the narrow katakana would drift apart. The
-    outlines are all drawn first, then the fills, so no outline crosses the
-    letter before it.
+    Characters are placed one at a time, a fixed gap apart plus a share of the
+    blank margins the font gives them: set solid they would run together at this
+    outline thickness, while keeping those margins whole - which is what spacing
+    by advance width does - strings the narrow katakana out. The outlines are
+    all drawn first, then the fills, so no outline crosses the letter before it.
     """
     placements: list[tuple[str, float]] = []
     cursor = 0.0
+    trailing = 0.0  # right side bearing of the character just placed
     for character in text:
         if character.isspace():
             cursor += word_gap - tracking
+            trailing = 0.0
             continue
         # getbbox reports the layout box, so the ink itself is measured from a
         # rendered mask: that is what the gap is counted from.
         ink = font.getmask(character, mode="L").getbbox()
         if ink is None:  # a glyph with no ink of its own
             cursor += font.getlength(character) + tracking
+            trailing = 0.0
             continue
         left, right = ink[0], ink[2]
+        if placements:
+            cursor += bearing * (trailing + left)
         draw_x = cursor - left
         placements.append((character, draw_x))
         cursor = draw_x + right + tracking
+        trailing = font.getlength(character) - right
     line_width = max(0.0, cursor - tracking)
 
     ascent, descent = font.getmetrics()
@@ -224,7 +235,7 @@ def _line_image(
     outline = round(size * style.outline_ratio)
     tracking = round(size * style.tracking_ratio)
     word_gap = round(size * style.word_gap_ratio)
-    return _ink(text, font, weight, outline, tracking, word_gap, style)
+    return _ink(text, font, weight, outline, tracking, word_gap, style.bearing_ratio, style)
 
 
 def _fit_size(
@@ -308,12 +319,17 @@ def _place_top_lines(
 
     result: list[_Placed] = []
     y = bottom_limit - art_gap
+    main_x = round(width * style.side_margin)
     if main is not None:
+        main_x = (width - main.width) // 2
         y -= main.height
-        result.append(_Placed(main, (width - main.width) // 2, y))
+        result.append(_Placed(main, main_x, y))
     if tag is not None:
         y -= gap + tag.height
-        result.append(_Placed(tag, round(width * style.side_margin), max(0, y)))
+        # Hang the tag just off the big line's left edge rather than parking it
+        # in the corner, so the two read as one block however wide the big line.
+        x = max(round(width * 0.035), main_x - round(tag.height * 0.55))
+        result.append(_Placed(tag, x, max(0, y)))
     return result
 
 
