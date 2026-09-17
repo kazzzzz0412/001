@@ -262,4 +262,7 @@ pytest
 - `card_grade_marker/` — PSA鑑定分布データのスクリーンショットから、該当グレー
   ド以外のチップを消して1つだけを矢印で示す画像加工ツールです。麻雀アドバイザー
   とは独立して動きます。詳細は [card_grade_marker/README.md](card_grade_marker/README.md)。
+- `card_title_overlay/` — カードの写真に、白抜き＋赤フチの太字ゴシックで出品タ
+  イトルを焼き込むツールです。カードの絵柄を避けて配置します。詳細は
+  [card_title_overlay/README.md](card_title_overlay/README.md)。
 
