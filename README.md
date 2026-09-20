@@ -269,5 +269,6 @@ pytest
   （POP）・読み取り日付を焼き込むツールです。詳細は
   [card_stat_stamp/README.md](card_stat_stamp/README.md)。
 - `card_lettering/` — 上2つが共通で使う「白抜き＋赤フチの太字」描画モジュール
-  です（単体では実行しません）。
+  です（単体では実行しません）。太字ゴシック体の導入は
+  `./scripts/install-fonts.sh`。
 

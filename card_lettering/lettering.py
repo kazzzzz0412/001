@@ -35,10 +35,13 @@ class LetterStyle:
 
     fill: tuple[int, int, int] = (255, 255, 255)
     outline: tuple[int, int, int] = (228, 30, 38)
-    # Stroke added to every glyph, as a fraction of the font size: this is what
-    # turns a regular gothic into a heavy one. Past about 0.04 the counters of
-    # dense kanji fill in, so a genuinely heavy font wants a lower value here.
-    weight_ratio: float = 0.035
+    # Stroke added to every glyph, as a fraction of the font size. None picks
+    # it from the font: a face that is already Bold or Black needs none, and
+    # thickening one would only close the counters of its denser kanji.
+    weight_ratio: float | None = None
+    # What None means for a font that is not already heavy. Past about 0.04 the
+    # counters of dense kanji fill in, so this stays modest.
+    synthetic_weight: float = 0.035
     # Outline thickness, as a fraction of the font size.
     outline_ratio: float = 0.145
     # Gap between the INK of neighbouring characters, as a fraction of the font
@@ -136,10 +139,22 @@ def _draw_line(
     return layer.crop(box) if box else layer
 
 
+HEAVY_STYLES = ("black", "heavy", "bold", "ultra", "extra")
+
+
+def is_heavy(font: ImageFont.FreeTypeFont) -> bool:
+    """Whether the face is already a heavy weight and needs no thickening."""
+    style = (font.getname()[1] or "").lower()
+    return any(word in style for word in HEAVY_STYLES)
+
+
 def line_image(text: str, size: int, font_path: str, style: LetterStyle) -> Image.Image:
     """Render one line at ``size``, cropped to its ink."""
     font = ImageFont.truetype(font_path, size)
-    weight = round(size * style.weight_ratio)
+    ratio = style.weight_ratio
+    if ratio is None:
+        ratio = 0.0 if is_heavy(font) else style.synthetic_weight
+    weight = round(size * ratio)
     outline = round(size * style.outline_ratio)
     tracking = round(size * style.tracking_ratio)
     word_gap = round(size * style.word_gap_ratio)

@@ -37,9 +37,9 @@ class StampText:
 class StampStyle(LetterStyle):
     """Where the three lines sit, as fractions of the photo."""
 
-    # These lines are Latin capitals and digits, whose counters stay open at a
-    # weight that would clog a kanji, so they are set heavier than body text.
-    weight_ratio: float = 0.055
+    # Latin capitals and digits keep their counters open at a weight that would
+    # clog a kanji, so when the font has to be thickened it can take more.
+    synthetic_weight: float = 0.055
     # Ink height of each line.
     grade_cap: float = 0.0585
     pop_cap: float = 0.0715
