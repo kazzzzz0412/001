@@ -265,4 +265,9 @@ pytest
 - `card_title_overlay/` — カードの写真に、白抜き＋赤フチの太字ゴシックで出品タ
   イトルを焼き込むツールです。カードの絵柄を避けて配置します。詳細は
   [card_title_overlay/README.md](card_title_overlay/README.md)。
+- `card_stat_stamp/` — 鑑定カード（PSAスラブ）の写真に、グレード・鑑定枚数
+  （POP）・読み取り日付を焼き込むツールです。詳細は
+  [card_stat_stamp/README.md](card_stat_stamp/README.md)。
+- `card_lettering/` — 上2つが共通で使う「白抜き＋赤フチの太字」描画モジュール
+  です（単体では実行しません）。
 

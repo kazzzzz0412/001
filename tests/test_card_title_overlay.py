@@ -7,7 +7,6 @@ from card_title_overlay import (
     TitleStyle,
     add_title,
     find_artwork_band,
-    find_font,
     split_title,
 )
 from card_title_overlay.__main__ import main
@@ -47,53 +46,6 @@ def test_split_title_puts_the_subject_in_the_middle():
 )
 def test_split_title_shorter_titles(title, expected):
     assert split_title(title) == expected
-
-
-def test_a_space_opens_a_wider_gap_than_plain_characters():
-    from card_title_overlay.overlay import _line_image
-
-    style = TitleStyle()
-    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
-    solid = _line_image("カイリキー進化系", 120, font, style)
-    spaced = _line_image("カイリキー 進化系", 120, font, style)
-    assert spaced.width > solid.width + round(120 * style.tracking_ratio)
-
-
-@pytest.mark.parametrize("character", ["イ", "國", "ー"])
-def test_characters_sit_one_tracking_apart_whatever_their_width(character):
-    # With the font's own margins dropped, spacing goes by ink rather than by
-    # advance width: doubling a character adds its own ink plus one gap, for a
-    # narrow katakana exactly as for a wide kanji.
-    from card_title_overlay.overlay import _line_image
-
-    size = 120
-    style = TitleStyle(bearing_ratio=0.0)
-    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
-    edge = round(size * style.weight_ratio) + round(size * style.outline_ratio)
-    one = _line_image(character, size, font, style)
-    two = _line_image(character * 2, size, font, style)
-
-    grown = two.width - one.width
-    assert grown == pytest.approx(
-        one.width - 2 * edge + round(size * style.tracking_ratio), abs=2
-    )
-
-
-def test_keeping_some_side_margin_gives_narrow_characters_more_air():
-    # A katakana carries wider blank margins than a kanji, so the share of them
-    # that is kept opens it up more - which is what stops it reading tighter.
-    from card_title_overlay.overlay import _line_image
-
-    size = 120
-    font = "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf"
-
-    def added(character: str, bearing: float) -> int:
-        style = TitleStyle(bearing_ratio=bearing)
-        one = _line_image(character, size, font, style)
-        two = _line_image(character * 2, size, font, style)
-        return (two.width - one.width) - one.width
-
-    assert added("イ", 0.45) - added("イ", 0.0) > added("國", 0.45) - added("國", 0.0)
 
 
 def test_artwork_band_is_the_card_faces_not_the_label():
@@ -173,12 +125,6 @@ def test_colors_can_be_changed():
     after = np.asarray(result).astype(int)
     blue = (after[..., 2] > 200) & (after[..., 0] < 80)
     assert blue.sum() > 10000
-
-
-def test_a_missing_font_is_reported(monkeypatch):
-    monkeypatch.setattr("card_title_overlay.overlay.FONT_CANDIDATES", ("/nowhere.ttf",))
-    with pytest.raises(FileNotFoundError, match="--font"):
-        find_font()
 
 
 def test_cli_writes_an_image(tmp_path, capsys):
