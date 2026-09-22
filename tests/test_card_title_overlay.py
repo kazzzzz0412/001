@@ -83,9 +83,9 @@ def test_protecting_the_card_covers_more_than_the_artwork():
     assert card[0] < art[0] and card[1] > art[1]
 
 
-def test_the_whole_card_is_left_untouched_by_default():
+def test_the_whole_card_can_be_left_untouched():
     photo = make_photo()
-    result, _, band = add_title(photo, "希少 カイリキー 進化系 セット")
+    result, _, band = add_title(photo, "希少 カイリキー 進化系 セット", protect="card")
     before = np.asarray(photo)
     after = np.asarray(result)
     assert band == find_card_band(photo)
@@ -106,9 +106,7 @@ def test_without_a_seam_the_band_starts_at_the_top_of_the_subject():
 
 def test_the_artwork_is_left_untouched():
     photo = make_photo()
-    result, _, band = add_title(
-        photo, "希少 カイリキー 進化系 eカード 3連番 セット", protect="art"
-    )
+    result, _, band = add_title(photo, "希少 カイリキー 進化系 eカード 3連番 セット")
 
     before = np.asarray(photo)
     after = np.asarray(result)
@@ -117,9 +115,7 @@ def test_the_artwork_is_left_untouched():
 
 def test_text_lands_above_and_below_the_cards():
     photo = make_photo()
-    result, _, band = add_title(
-        photo, "希少 カイリキー 進化系 eカード 3連番 セット", protect="art"
-    )
+    result, _, band = add_title(photo, "希少 カイリキー 進化系 eカード 3連番 セット")
     after = np.asarray(result).astype(int)
 
     def painted(rows):

@@ -267,13 +267,14 @@ def add_title(
     style: TitleStyle | None = None,
     font: str | None = None,
     band: tuple[int, int] | None = None,
-    protect: str = "card",
+    protect: str = "art",
 ) -> tuple[Image.Image, TitleLines, tuple[int, int]]:
     """Draw ``title`` on ``image``, clear of the rows it must not cover.
 
-    ``protect`` picks what those rows are: "card" (the default) keeps off the
-    whole card, label aside; "art" keeps off the illustrations only, which
-    leaves a pale card's name and text fair game.
+    ``protect`` picks what those rows are: "art" (the default) keeps off the
+    illustrations, which leaves the text sitting low enough that a slab's grade
+    stays readable; "card" keeps off the whole card, which reads more cleanly
+    but pushes the text up over the grading label.
     """
     style = style or TitleStyle()
     lines = split_title(title) if isinstance(title, str) else title

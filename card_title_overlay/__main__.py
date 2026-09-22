@@ -100,11 +100,12 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument(
         "--protect",
-        choices=("card", "art"),
-        default="card",
+        choices=("art", "card"),
+        default="art",
         help=(
-            "what the text must keep off: 'card' the whole card, label aside "
-            "(default), or 'art' the illustrations only"
+            "what the text must keep off: 'art' the illustrations (default), "
+            "or 'card' the whole card - tidier, but it puts the text over the "
+            "grading label"
         ),
     )
     parser.add_argument(
@@ -143,7 +144,7 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.show_only:
         try:
-            finder = find_card_band if args.protect == "card" else find_artwork_band
+            finder = find_artwork_band if args.protect == "art" else find_card_band
             band = args.band or finder(image)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
