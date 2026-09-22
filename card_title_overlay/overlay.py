@@ -22,6 +22,8 @@ ART_VALUE = 70
 ART_ROW_COVERAGE = 0.12
 # Rows closer together than this belong to the same band.
 ART_ROW_GAP = 30
+# A row belongs to the subject when this much of its width is bright.
+SUBJECT_ROW_COVERAGE = 0.35
 
 
 @dataclass(frozen=True)
@@ -109,6 +111,48 @@ def find_artwork_band(image: Image.Image) -> tuple[int, int]:
         raise ValueError("no card artwork found in this photo")
     y0, y1 = max(bands, key=lambda band: band[1] - band[0])
     return y0, min(y1, height - 1)
+
+
+def find_card_band(image: Image.Image) -> tuple[int, int]:
+    """Rows spanned by the cards themselves, label excluded.
+
+    ``find_artwork_band`` goes by colour, which on a pale card finds only the
+    illustration window and leaves the card's name and text fair game. This
+    instead takes the bright subject - the slabs against their dark backdrop -
+    and cuts off the grading label above it at the darkest seam, the shadow
+    line of the slab frame between the label and the card.
+    """
+    rgb = np.asarray(image.convert("RGB")).astype(np.int16)
+    height, width, _ = rgb.shape
+    lum = rgb.mean(axis=2)
+
+    dark, light = np.percentile(lum, (10, 90))
+    bright = lum > (dark + light) / 2
+    bands = _row_bands(bright.sum(axis=1) / width > SUBJECT_ROW_COVERAGE, ART_ROW_GAP)
+    if not bands:
+        raise ValueError("no cards found in this photo")
+    y0, y1 = max(bands, key=lambda band: band[1] - band[0])
+
+    columns = np.flatnonzero(bright[y0 : y1 + 1].sum(axis=0) > (y1 - y0) * 0.5)
+    if columns.size:
+        lum = lum[:, columns.min() : columns.max() + 1]
+    profile = lum[y0 : y1 + 1].mean(axis=1)
+    top = round((y1 - y0) * 0.15)
+    bottom = round((y1 - y0) * 0.50)
+    darkest = top + int(np.argmin(profile[top:bottom]))
+
+    # Only cut there if it is a dip, darker than what sits on either side of
+    # it. When the label is separated from the card by shadow the band already
+    # starts at the card and there is no dip, and cutting at the darkest row
+    # anyway would hand the top of the card over to the text.
+    reach = max(5, round((y1 - y0) * 0.03))
+    shoulder = min(
+        profile[max(0, darkest - reach) : darkest].max(initial=0.0),
+        profile[darkest + 1 : darkest + reach + 1].max(initial=0.0),
+    )
+    if shoulder - profile[darkest] < np.median(profile) * 0.10:
+        return y0, min(y1, height - 1)
+    return y0 + darkest, min(y1, height - 1)
 
 
 @dataclass(frozen=True)
@@ -223,15 +267,26 @@ def add_title(
     style: TitleStyle | None = None,
     font: str | None = None,
     band: tuple[int, int] | None = None,
+    protect: str = "card",
 ) -> tuple[Image.Image, TitleLines, tuple[int, int]]:
-    """Draw ``title`` on ``image``, above and below the card artwork."""
+    """Draw ``title`` on ``image``, clear of the rows it must not cover.
+
+    ``protect`` picks what those rows are: "card" (the default) keeps off the
+    whole card, label aside; "art" keeps off the illustrations only, which
+    leaves a pale card's name and text fair game.
+    """
     style = style or TitleStyle()
     lines = split_title(title) if isinstance(title, str) else title
     if not lines:
         raise ValueError("nothing to draw: the title is empty")
+    if protect not in {"art", "card"}:
+        raise ValueError(f"protect must be 'art' or 'card', not {protect!r}")
 
     font_path = find_font(font)
-    art = band or find_artwork_band(image)
+    if band is not None:
+        art = band
+    else:
+        art = find_artwork_band(image) if protect == "art" else find_card_band(image)
     out = image.convert("RGB").copy()
     size = out.size
 

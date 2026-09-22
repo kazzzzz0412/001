@@ -7,26 +7,35 @@ from card_title_overlay import (
     TitleStyle,
     add_title,
     find_artwork_band,
+    find_card_band,
     split_title,
 )
 from card_title_overlay.__main__ import main
 
 BACKDROP = (18, 18, 20)
 ART_TOP, ART_BOTTOM = 700, 1500
-LABEL_TOP, LABEL_BOTTOM = 400, 460
+LABEL_TOP, LABEL_BOTTOM = 400, 425
+
+
+SEAM_TOP, SEAM_BOTTOM = 490, 509
+CARD_TOP = 520
 
 
 def make_photo(width=2576, height=1932, label=True, art=(ART_TOP, ART_BOTTOM)):
     """A stand-in for a photo of slabbed cards on a dark backdrop."""
     image = Image.new("RGB", (width, height), BACKDROP)
     draw = ImageDraw.Draw(image)
-    # The slabs: pale grey, barely saturated, so not artwork.
-    draw.rectangle((150, 250, width - 150, height - 330), fill=(205, 208, 212))
+    # The slab: mid grey, barely saturated, so not artwork.
+    draw.rectangle((150, 250, width - 150, height - 250), fill=(150, 152, 156))
     if label:
-        # The red header of a grading label: saturated, but a thin band.
+        # A grading label, with the red header that makes it colourful.
+        draw.rectangle((170, 280, width - 170, SEAM_TOP - 1), fill=(228, 230, 234))
         draw.rectangle((170, LABEL_TOP, width - 170, LABEL_BOTTOM), fill=(214, 44, 52))
-    # The card faces: a tall block of saturated yellow.
-    draw.rectangle((190, art[0], width - 190, art[1]), fill=(236, 178, 46))
+        # The slab frame between the label and the card reads as a dark seam.
+        draw.rectangle((150, SEAM_TOP, width - 150, SEAM_BOTTOM), fill=(70, 72, 76))
+    # The card itself: pale, with a block of saturated yellow for its artwork.
+    draw.rectangle((190, CARD_TOP, width - 190, height - 330), fill=(236, 236, 238))
+    draw.rectangle((210, art[0], width - 210, art[1]), fill=(236, 178, 46))
     return image
 
 
@@ -59,9 +68,47 @@ def test_a_photo_without_artwork_is_reported():
         find_artwork_band(Image.new("RGB", (800, 600), BACKDROP))
 
 
+def test_the_card_band_starts_below_the_label():
+    # A pale card shows little colour outside its illustration, so the band to
+    # keep off is found from the slab and the seam under its label instead.
+    y0, y1 = find_card_band(make_photo())
+    assert SEAM_TOP <= y0 <= SEAM_BOTTOM
+    assert y1 > ART_BOTTOM
+
+
+def test_protecting_the_card_covers_more_than_the_artwork():
+    photo = make_photo()
+    art = find_artwork_band(photo)
+    card = find_card_band(photo)
+    assert card[0] < art[0] and card[1] > art[1]
+
+
+def test_the_whole_card_is_left_untouched_by_default():
+    photo = make_photo()
+    result, _, band = add_title(photo, "希少 カイリキー 進化系 セット")
+    before = np.asarray(photo)
+    after = np.asarray(result)
+    assert band == find_card_band(photo)
+    assert np.array_equal(after[band[0] : band[1] + 1], before[band[0] : band[1] + 1])
+
+
+def test_an_unknown_protect_is_reported():
+    with pytest.raises(ValueError, match="protect must be"):
+        add_title(make_photo(), "希少 カイリキー セット", protect="slab")
+
+
+def test_without_a_seam_the_band_starts_at_the_top_of_the_subject():
+    # No label at all: there is no trough to cut at, so nothing is given away.
+    photo = make_photo(label=False)
+    y0, _ = find_card_band(photo)
+    assert y0 == pytest.approx(250, abs=6)
+
+
 def test_the_artwork_is_left_untouched():
     photo = make_photo()
-    result, _, band = add_title(photo, "希少 カイリキー 進化系 eカード 3連番 セット")
+    result, _, band = add_title(
+        photo, "希少 カイリキー 進化系 eカード 3連番 セット", protect="art"
+    )
 
     before = np.asarray(photo)
     after = np.asarray(result)
@@ -70,7 +117,9 @@ def test_the_artwork_is_left_untouched():
 
 def test_text_lands_above_and_below_the_cards():
     photo = make_photo()
-    result, _, band = add_title(photo, "希少 カイリキー 進化系 eカード 3連番 セット")
+    result, _, band = add_title(
+        photo, "希少 カイリキー 進化系 eカード 3連番 セット", protect="art"
+    )
     after = np.asarray(result).astype(int)
 
     def painted(rows):

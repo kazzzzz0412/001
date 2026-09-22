@@ -10,6 +10,7 @@ from .overlay import (
     TitleStyle,
     add_title,
     find_artwork_band,
+    find_card_band,
     find_font,
     split_title,
 )
@@ -19,6 +20,7 @@ __all__ = [
     "TitleStyle",
     "add_title",
     "find_artwork_band",
+    "find_card_band",
     "find_font",
     "split_title",
 ]

@@ -8,7 +8,14 @@ from pathlib import Path
 
 from PIL import Image
 
-from .overlay import TitleLines, TitleStyle, add_title, find_artwork_band, find_font
+from .overlay import (
+    TitleLines,
+    TitleStyle,
+    add_title,
+    find_artwork_band,
+    find_card_band,
+    find_font,
+)
 
 
 def _parse_color(value: str) -> tuple[int, int, int]:
@@ -92,6 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
         help="gap where the title had a space, as a fraction of the font size (default: 0.34)",
     )
     parser.add_argument(
+        "--protect",
+        choices=("card", "art"),
+        default="card",
+        help=(
+            "what the text must keep off: 'card' the whole card, label aside "
+            "(default), or 'art' the illustrations only"
+        ),
+    )
+    parser.add_argument(
         "--band",
         type=_parse_band,
         help="rows Y0:Y1 the artwork occupies, instead of detecting them",
@@ -127,7 +143,8 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.show_only:
         try:
-            band = args.band or find_artwork_band(image)
+            finder = find_card_band if args.protect == "card" else find_artwork_band
+            band = args.band or finder(image)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
@@ -152,7 +169,7 @@ def main(argv: list[str] | None = None) -> int:
         style.word_gap_ratio = args.word_gap
     try:
         result, lines, band = add_title(
-            image, title, style=style, font=args.font, band=args.band
+            image, title, style=style, font=args.font, band=args.band, protect=args.protect
         )
     except (ValueError, FileNotFoundError) as exc:
         print(f"error: {exc}", file=sys.stderr)
