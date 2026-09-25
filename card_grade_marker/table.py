@@ -141,7 +141,11 @@ def _erase_spans(table: GradeTable, target: TableRow) -> list[tuple[int, int]]:
 
 
 def _count_end(rgb: np.ndarray, table: GradeTable, row: TableRow) -> int:
-    """Right edge of the first thing written past the grade column."""
+    """Right edge of the first thing written past the grade column.
+
+    The count is several glyphs with gaps inside it, so the runs are grouped:
+    taking the first run alone would put the arrow through the last digit.
+    """
     start = table.dividers[-1][1] + 1 if table.dividers else table.x0
     band = rgb[row.y0 : row.y1 + 1, start : table.x1]
     if not band.size:
@@ -150,8 +154,16 @@ def _count_end(rgb: np.ndarray, table: GradeTable, row: TableRow) -> int:
     spans = _runs(ink, 3)
     if not spans:
         return start
+
+    # A gap this wide is the space to the next column, not one between digits.
+    apart = round(row.height * 0.25)
+    end = spans[0][1]
+    for left, right in spans[1:]:
+        if left - end > apart:
+            break
+        end = right
     # Clear of the glyphs, whose antialiased edges reach past the run.
-    return start + spans[0][1] + round(row.height * 0.15)
+    return start + end + round(row.height * 0.15)
 
 
 def mark_table(

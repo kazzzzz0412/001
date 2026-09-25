@@ -41,7 +41,9 @@ def make_table(rows=6, divider_line=True):
         draw.rectangle((X0, y, DIVIDER[1], y + ROW_HEIGHT - 1), fill=TINT)
         # A grade in the first column and a count in the second.
         draw.rectangle((100, y + 40, 160, y + 90), fill=INK)
-        draw.rectangle((495, y + 40, 560, y + 90), fill=INK)
+        # A count of several glyphs, with gaps inside it like real digits.
+        for left in (495, 522, 545):
+            draw.rectangle((left, y + 40, left + 15, y + 90), fill=INK)
         y = rule(y + ROW_HEIGHT)
 
     draw.rectangle((X0, y, X1, y + ROW_HEIGHT - 1), fill=RULE)
@@ -108,7 +110,7 @@ def test_the_kept_row_is_marked():
         assert ((band[..., 0] > 200) & (band[..., 1] < 90)).sum() > 500
 
 
-def test_the_arrow_does_not_cover_the_count():
+def test_the_arrow_starts_clear_of_the_count():
     photo = make_table()
     table = find_table(photo)
     kept = table.grades[0]
@@ -116,8 +118,10 @@ def test_the_arrow_does_not_cover_the_count():
         mark_table(photo, table, 0, MarkerStyle(arrow_color=(255, 0, 0)), mark="arrow")
     ).astype(int)
 
-    count = after[kept.y0 : kept.y1 + 1, 495:561]
-    assert (count > 200).all(axis=2).any()
+    band = after[kept.y0 : kept.y1 + 1]
+    arrow = np.flatnonzero(((band[..., 0] > 200) & (band[..., 1] < 90)).any(axis=0))
+    # The count is drawn out to x=560; nothing of the arrow may reach it.
+    assert arrow.min() > 560
 
 
 def test_an_unknown_mark_is_reported():
