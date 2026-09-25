@@ -9,6 +9,7 @@ from pathlib import Path
 from PIL import Image
 
 from .marker import MarkerStyle, detect_chip_row, highlight_grade
+from .table import find_table, mark_table
 
 
 def _parse_color(value: str) -> tuple[int, int, int]:
@@ -86,6 +87,21 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     parser.add_argument(
+        "-r",
+        "--row",
+        type=int,
+        help=(
+            "for the table layout the app uses now: which grade row to keep, "
+            "counted from the top (1-based, header and 合計 excluded)"
+        ),
+    )
+    parser.add_argument(
+        "--mark",
+        choices=("ring", "arrow"),
+        default="ring",
+        help="how to mark the kept table row (default: a ring around it)",
+    )
+    parser.add_argument(
         "--band",
         type=_parse_band,
         help="force the chip row to rows Y0:Y1 instead of detecting it",
@@ -142,15 +158,30 @@ def main(argv: list[str] | None = None) -> int:
         return 1
 
     if args.list_only:
+        if args.row is None:
+            try:
+                row = detect_chip_row(image, band=args.band)
+            except ValueError:
+                pass
+            else:
+                print(f"chip row: rows {row.y0}-{row.y1}, background rgb{row.background}")
+                for i, chip in enumerate(row.chips, start=1):
+                    mark = " <- selected" if chip.selected else ""
+                    print(f"  {i}: x {chip.x0}-{chip.x1} (width {chip.width}){mark}")
+                return 0
         try:
-            row = detect_chip_row(image, band=args.band)
+            table = find_table(image)
         except ValueError as exc:
             print(f"error: {exc}", file=sys.stderr)
             return 1
-        print(f"chip row: rows {row.y0}-{row.y1}, background rgb{row.background}")
-        for i, chip in enumerate(row.chips, start=1):
-            mark = " <- selected" if chip.selected else ""
-            print(f"  {i}: x {chip.x0}-{chip.x1} (width {chip.width}){mark}")
+        print(f"table: x {table.x0}-{table.x1}, background rgb{table.background}")
+        grade = 0
+        for entry in table.rows:
+            label = entry.kind
+            if entry.kind == "grade":
+                grade += 1
+                label = f"grade row {grade}"
+            print(f"  {label}: rows {entry.y0}-{entry.y1}")
         return 0
 
     if str(args.target).lower() == "auto":
@@ -173,15 +204,40 @@ def main(argv: list[str] | None = None) -> int:
         pad=args.pad,
     )
 
+    output = args.output or args.image.with_name(f"{args.image.stem}_marked.png")
+
+    if args.row is not None:
+        try:
+            table = find_table(image)
+            result = mark_table(image, table, args.row - 1, style, mark=args.mark)
+        except (ValueError, IndexError) as exc:
+            print(f"error: {exc}", file=sys.stderr)
+            return 1
+        result.save(output)
+        kept = table.grades[args.row - 1]
+        print(
+            f"kept grade row {args.row} of {len(table.grades)} "
+            f"(rows {kept.y0}-{kept.y1}) -> {output}"
+        )
+        return 0
+
     try:
         result, row, index = highlight_grade(
             image, target=target, style=style, band=args.band, chip=args.chip
         )
-    except (ValueError, IndexError) as exc:
-        print(f"error: {exc}", file=sys.stderr)
+    except (ValueError, IndexError) as chips_failed:
+        try:
+            table = find_table(image)
+        except ValueError:
+            print(f"error: {chips_failed}", file=sys.stderr)
+            return 1
+        print(
+            "error: this screenshot lays the grades out as a table; choose the "
+            f"row with --row N (1..{len(table.grades)}, counted from the top)",
+            file=sys.stderr,
+        )
         return 1
 
-    output = args.output or args.image.with_name(f"{args.image.stem}_marked.png")
     result.save(output)
     chip = row.chips[index]
     print(
