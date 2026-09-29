@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>動画リサーチ</title>
+<style>
+  :root { --bg:#f6f7f9; --card:#fff; --text:#1d2330; --muted:#667085; --line:#e4e7ec; --accent:#2563eb; --accent-text:#fff; --hot:#dc2626; }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg:#0f1218; --card:#181c25; --text:#e8ebf2; --muted:#98a2b3; --line:#2a303c; --accent:#3b82f6; }
+  }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font:14px/1.5 system-ui,"Hiragino Sans","Noto Sans JP",sans-serif; }
+  main { max-width:1200px; margin:0 auto; padding:20px 16px 48px; }
+  h1 { font-size:20px; margin:0 0 16px; }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:16px; }
+  .grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(170px,1fr)); gap:12px; }
+  label { display:block; font-size:12px; color:var(--muted); margin-bottom:4px; }
+  input, select { width:100%; padding:8px 10px; border:1px solid var(--line); border-radius:6px; background:var(--bg); color:var(--text); font:inherit; }
+  button { padding:9px 18px; border:0; border-radius:6px; background:var(--accent); color:var(--accent-text); font:inherit; font-weight:600; cursor:pointer; }
+  button:disabled { opacity:.5; cursor:not-allowed; }
+  .row { display:flex; gap:12px; align-items:end; flex-wrap:wrap; margin-top:12px; }
+  .hint { color:var(--muted); font-size:12px; }
+  .error { color:var(--hot); white-space:pre-wrap; margin-top:12px; }
+  .bar { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:12px; }
+  .bar > div { height:100%; width:0; background:var(--accent); transition:width .2s; }
+  .tiles { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:12px; }
+  .tile { border:1px solid var(--line); border-radius:8px; padding:10px 12px; }
+  .tile .v { font-size:22px; font-weight:700; }
+  .tile .k { font-size:12px; color:var(--muted); }
+  .tablewrap { overflow-x:auto; }
+  table { border-collapse:collapse; width:100%; min-width:860px; }
+  th, td { padding:8px 10px; border-bottom:1px solid var(--line); text-align:right; vertical-align:middle; }
+  th { font-size:12px; color:var(--muted); cursor:pointer; user-select:none; white-space:nowrap; }
+  th.left, td.left { text-align:left; }
+  td.title { max-width:340px; }
+  td img { width:96px; height:54px; object-fit:cover; border-radius:4px; display:block; }
+  a { color:var(--accent); text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  .hot { color:var(--hot); font-weight:700; }
+  .inline { display:flex; align-items:center; gap:6px; }
+  .inline input { width:auto; }
+  [hidden] { display:none !important; }
+</style>
+</head>
+<body>
+<main>
+  <h1>動画リサーチ</h1>
+
+  <form id="form" class="card">
+    <div class="grid">
+      <div><label for="key">YouTube Data API キー</label><input id="key" type="password" autocomplete="off" placeholder="AIza..." required></div>
+      <div><label for="query">キーワード</label><input id="query" type="text" required></div>
+      <div><label for="days">投稿日(過去◯日)</label>
+        <select id="days"><option value="7">過去7日</option><option value="30" selected>過去30日</option><option value="90">過去90日</option><option value="365">過去1年</option></select></div>
+      <div><label for="maxSeconds">動画の長さ</label>
+        <select id="maxSeconds"><option value="60" selected>60秒以内</option><option value="180">3分以内</option></select></div>
+      <div><label for="order">並び順(検索時)</label>
+        <select id="order"><option value="viewCount" selected>再生回数順</option><option value="date">新着順</option><option value="relevance">関連度順</option></select></div>
+      <div><label for="perChannelLimit">1チャンネルの上限</label><input id="perChannelLimit" type="number" min="1" max="50" value="20"></div>
+      <div><label for="targetCount">取得動画数</label>
+        <select id="targetCount"><option value="50">50本</option><option value="100">100本</option><option value="200" selected>200本</option></select></div>
+    </div>
+    <div class="row">
+      <button id="go" type="submit">最新データを取得</button>
+      <span class="hint" id="quotaHint">1回の取得で API 利用枠(1日1万)を約100〜1,000消費します。</span>
+    </div>
+    <div class="bar" id="bar" hidden><div id="barFill"></div></div>
+    <div class="hint" id="status"></div>
+    <div class="error" id="error" role="alert"></div>
+  </form>
+
+  <section id="results" hidden>
+    <div class="card"><div class="tiles" id="tiles"></div></div>
+    <div class="card">
+      <div class="row" style="margin-top:0">
+        <div style="width:170px"><label for="threshold">再生倍率のしきい値</label><input id="threshold" type="number" min="0" step="0.5" value="10"></div>
+        <label class="inline" style="margin-bottom:9px"><input id="onlyHot" type="checkbox"> しきい値以上のみ表示</label>
+        <span class="hint" style="margin-bottom:9px">再生倍率 = 再生回数 ÷ チャンネル登録者数。見出しクリックで並べ替え。</span>
+      </div>
+      <div class="tablewrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+</main>
+<script type="module" src="app.js"></script>
+</body>
+</html>
