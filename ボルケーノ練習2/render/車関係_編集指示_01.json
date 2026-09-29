@@ -1,0 +1,34 @@
+{
+  "_comment": "Dodge Viper ACR vs Lexus LFA / 70秒。台本: 車関係_台本_01_バイパーvsLFA.md",
+  "source": "SET_ME.mp4",
+  "output": "out/車関係_01_バイパーvsLFA.mp4",
+
+  "segments": [
+    { "in": "4:02",  "out": "4:05",  "_": "フック: Viperが白煙を上げて急発進" },
+    { "in": "2:07",  "out": "2:11",  "_": "LFAの3連マフラー / 甲高いV10" },
+    { "in": "2:23",  "out": "2:27",  "_": "Viperのサイドマフラー / 野太いV10" },
+    { "in": "9:48",  "out": "10:19", "_": "スタート〜レース前半" },
+    { "in": "10:23", "out": "10:40", "_": "終盤〜ハーフマイル通過（偽の決着）〜リアクション" },
+    { "in": "11:07", "out": "11:18", "_": "どんでん返し〜クォーターマイルのゴール〜タイム表示" }
+  ],
+
+  "overlay": "../template/out/overlay_alpha.png",
+  "overlay_winner": "../template/out/overlay_alpha_winner.png",
+  "overlay_swap_at": 62.0,
+
+  "subtitle_y": 599,
+  "subtitle_size": 19,
+  "subtitles": [
+    { "start": 11.5, "end": 13.5, "text": "3 2 1" },
+    { "start": 20.0, "end": 21.8, "text": "よし" },
+    { "start": 22.0, "end": 24.0, "text": "互角だ 行けレクサス" },
+    { "start": 24.2, "end": 26.2, "text": "今度はいいぞ" },
+    { "start": 34.0, "end": 36.2, "text": "前に出られた 踏ん張れ" },
+    { "start": 37.0, "end": 38.8, "text": "行け よし" },
+    { "start": 47.0, "end": 49.5, "text": "嘘だろ 負ける" },
+    { "start": 51.0, "end": 52.8, "text": "そのままだ" },
+    { "start": 55.0, "end": 56.8, "text": "よっしゃ" },
+    { "start": 59.0, "end": 61.5, "text": "実は ダッジの勝ちだった" },
+    { "start": 63.0, "end": 66.0, "text": "12.1秒 対 12.2秒" }
+  ]
+}
