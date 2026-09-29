@@ -69,13 +69,25 @@ def main():
 
         clip = {"x": 0, "y": 0, "width": 720, "height": 1280}
         pg.screenshot(path=str(OUT / "overlay_preview.png"), clip=clip)
+
+        # 勝者ハイライト版（決着の瞬間に差し替えるカット）
+        winner = d.get("winner")
+        if winner in ("left", "right"):
+            pg.evaluate("(w) => document.body.classList.add('win-' + w)", winner)
+            pg.wait_for_timeout(200)
+            pg.screenshot(path=str(OUT / "overlay_preview_winner.png"), clip=clip)
         b.close()
 
     # 背景の黒は残したまま、クリップ窓だけをくり抜いて透過PNGにする。
     # （編集ソフトでは、下のレイヤーに素材クリップ、上にこのPNGを重ねる）
     punch_clip_window(OUT / "overlay_preview.png", OUT / "overlay_alpha.png")
+    if (OUT / "overlay_preview_winner.png").exists():
+        punch_clip_window(OUT / "overlay_preview_winner.png", OUT / "overlay_alpha_winner.png")
 
-    print(f"書き出しました:\n  {OUT/'overlay_preview.png'}\n  {OUT/'overlay_alpha.png'}")
+    made = sorted(f.name for f in OUT.glob("overlay_*.png"))
+    print("書き出しました:")
+    for n in made:
+        print(f"  {OUT/n}")
 
 
 
