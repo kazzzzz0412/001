@@ -308,3 +308,6 @@ $("sortSel").addEventListener("change", () => {
 });
 
 loadSettings();
+try {
+  navigator.storage?.persist?.().catch(() => {});
+} catch {}

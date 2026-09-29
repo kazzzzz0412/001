@@ -69,7 +69,9 @@
 
   <form id="form" class="card">
     <div class="grid">
-      <div><label for="key">YouTube Data API キー</label><input id="key" type="password" autocomplete="off" placeholder="AIza..." required></div>
+      <div><label for="key">YouTube Data API キー</label>
+        <input id="keyUser" name="username" type="text" value="youtube-api-key" autocomplete="username" tabindex="-1" aria-hidden="true" style="position:absolute;left:-9999px;width:1px;height:1px;opacity:0">
+        <input id="key" name="password" type="password" autocomplete="current-password" placeholder="AIza..." required></div>
       <div><label for="query">キーワード</label><input id="query" type="text" required></div>
       <div><label for="days">投稿日(過去◯日)</label>
         <select id="days"><option value="7">過去7日</option><option value="30" selected>過去30日</option><option value="90">過去90日</option><option value="365">過去1年</option></select></div>
