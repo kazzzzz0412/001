@@ -64,6 +64,9 @@ function renderTable() {
   if ($("onlyHot").checked) rows = rows.filter((r) => r.multiplier !== null && r.multiplier >= threshold);
   rows = sortRows(rows, state.sortKey, state.sortDir);
 
+  const sel = `${state.sortKey}:${state.sortDir}`;
+  if ([...$("sortSel").options].some((o) => o.value === sel)) $("sortSel").value = sel;
+
   const arrow = (k) => (state.sortKey === k ? (state.sortDir === "asc" ? " ▲" : " ▼") : "");
   $("table").tHead.replaceChildren(
     el(
@@ -89,18 +92,23 @@ function renderTable() {
       const channelUrl = `https://www.youtube.com/channel/${encodeURIComponent(r.channelId)}`;
       const hot = r.multiplier !== null && r.multiplier >= threshold;
       const img = el("img", { src: r.thumbnail, alt: "", loading: "lazy" });
+      const cell = (label, props, ...children) => {
+        const td = el("td", props, ...children);
+        td.setAttribute("data-label", label);
+        return td;
+      };
       return el(
         "tr",
         {},
-        el("td", { className: "left" }, r.thumbnail ? wrap(videoUrl, img) : ""),
-        el("td", { className: "left title" }, link(videoUrl, r.title)),
-        el("td", { className: "left" }, link(channelUrl, r.channelTitle)),
-        el("td", { textContent: formatCount(r.subscribers) }),
-        el("td", { textContent: r.views.toLocaleString() }),
-        el("td", { textContent: r.likes === null ? "非公開" : r.likes.toLocaleString() }),
-        el("td", { textContent: r.likeRatio === null ? "-" : `${(r.likeRatio * 100).toFixed(2)}%` }),
-        el("td", { textContent: r.publishedAt.slice(0, 10) }),
-        el("td", { className: hot ? "hot" : "", textContent: r.multiplier === null ? "-" : `${r.multiplier.toFixed(1)}倍` }),
+        cell("", { className: "left thumb" }, r.thumbnail ? wrap(videoUrl, img) : ""),
+        cell("", { className: "left title" }, link(videoUrl, r.title)),
+        cell("", { className: "left channel" }, link(channelUrl, r.channelTitle)),
+        cell("登録者", { textContent: formatCount(r.subscribers) }),
+        cell("再生回数", { textContent: r.views.toLocaleString() }),
+        cell("いいね", { textContent: r.likes === null ? "非公開" : r.likes.toLocaleString() }),
+        cell("いいね/再生", { textContent: r.likeRatio === null ? "-" : `${(r.likeRatio * 100).toFixed(2)}%` }),
+        cell("投稿日", { textContent: r.publishedAt.slice(0, 10) }),
+        cell("再生倍率", { className: hot ? "hot" : "", textContent: r.multiplier === null ? "-" : `${r.multiplier.toFixed(1)}倍` }),
       );
     }),
   );
@@ -163,5 +171,11 @@ $("threshold").addEventListener("input", () => {
   renderTable();
 });
 $("onlyHot").addEventListener("change", renderTable);
+$("sortSel").addEventListener("change", () => {
+  const [key, dir] = $("sortSel").value.split(":");
+  state.sortKey = key;
+  state.sortDir = dir;
+  renderTable();
+});
 
 loadSettings();
