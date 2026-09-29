@@ -161,3 +161,99 @@ export function formatCount(n) {
   if (n >= 1e4) return `${(n / 1e4).toFixed(n >= 1e6 ? 0 : 1)}万`;
   return String(n);
 }
+
+const DAY = 86400000;
+const MAX_UPLOAD_PAGES = 6;
+
+export async function fetchChannelDetail(opts, fetchFn = fetch, onProgress = () => {}, now = new Date()) {
+  const { key, channelId, days, maxSeconds } = opts;
+  const cutoff = now.getTime() - days * DAY;
+  let quotaUnits = 0;
+
+  onProgress({ message: "チャンネル情報を取得中…" });
+  const chRes = await apiGet(fetchFn, "channels", { part: "snippet,statistics,contentDetails", id: channelId }, key);
+  quotaUnits++;
+  const channel = (chRes.items || [])[0];
+  if (!channel) throw new Error("チャンネルが見つかりませんでした。");
+  const uploads = channel.contentDetails.relatedPlaylists.uploads;
+
+  const ids = [];
+  let pageToken;
+  for (let page = 0; page < MAX_UPLOAD_PAGES; page++) {
+    onProgress({ message: `投稿動画を取得中… ${ids.length}本` });
+    const res = await apiGet(fetchFn, "playlistItems", { part: "contentDetails", playlistId: uploads, maxResults: 50, pageToken }, key);
+    quotaUnits++;
+    let reachedOld = false;
+    for (const it of res.items || []) {
+      const t = Date.parse(it.contentDetails.videoPublishedAt);
+      if (Number.isNaN(t)) continue;
+      if (t >= cutoff) ids.push(it.contentDetails.videoId);
+      else reachedOld = true;
+    }
+    pageToken = res.nextPageToken;
+    if (!pageToken || reachedOld) break;
+  }
+
+  onProgress({ message: "動画の再生数を取得中…" });
+  const batches = chunk(ids, 50);
+  const details = await Promise.all(
+    batches.map((b) => apiGet(fetchFn, "videos", { part: "snippet,contentDetails,statistics", id: b.join(","), maxResults: 50 }, key)),
+  );
+  quotaUnits += batches.length;
+
+  const rows = details
+    .flatMap((d) => d.items || [])
+    .filter((v) => parseDuration(v.contentDetails.duration) <= maxSeconds && Date.parse(v.snippet.publishedAt) >= cutoff)
+    .map((v) => toRow(v, channel));
+
+  const cs = channel.statistics || {};
+  return {
+    channel: {
+      id: channel.id,
+      title: channel.snippet.title,
+      subscribers: cs.hiddenSubscriberCount || cs.subscriberCount === undefined ? null : Number(cs.subscriberCount),
+      videoCount: cs.videoCount === undefined ? null : Number(cs.videoCount),
+    },
+    rows,
+    quotaUnits,
+  };
+}
+
+export function summarizeChannel(rows, subscribers, days) {
+  const count = rows.length;
+  const totalViews = rows.reduce((a, r) => a + r.views, 0);
+  const avgViews = count ? totalViews / count : null;
+  return {
+    count,
+    totalViews,
+    avgViews,
+    multiplier: avgViews !== null && subscribers ? avgViews / subscribers : null,
+    perWeek: count / (days / 7),
+    avgLikeRatio: mean(rows.map((r) => r.likeRatio).filter((v) => v !== null)),
+  };
+}
+
+export function bucketViews(rows, days, now = new Date()) {
+  const size = days <= 90 ? 1 : 7;
+  const n = Math.ceil(days / size);
+  const end = now.getTime();
+  const buckets = Array.from({ length: n }, (_, i) => ({ endMs: end - (n - 1 - i) * size * DAY, views: 0, count: 0 }));
+  for (const r of rows) {
+    const age = end - Date.parse(r.publishedAt);
+    if (Number.isNaN(age) || age < 0 || age >= n * size * DAY) continue;
+    const b = buckets[n - 1 - Math.floor(age / (size * DAY))];
+    b.views += r.views;
+    b.count++;
+  }
+  return buckets.map((b) => ({ ...b, label: new Date(b.endMs).toISOString().slice(5, 10).replace("-", "/") }));
+}
+
+export function niceTicks(max, count = 4) {
+  if (!(max > 0)) return [0, 1];
+  const rough = max / count;
+  const pow = 10 ** Math.floor(Math.log10(rough));
+  const step = [1, 2, 2.5, 5, 10].map((m) => m * pow).find((s) => s >= rough);
+  const ticks = [];
+  for (let v = 0; v < max + step; v += step) ticks.push(v);
+  return ticks;
+}

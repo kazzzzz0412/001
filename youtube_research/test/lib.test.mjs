@@ -1,6 +1,9 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseDuration, research, summarize, sortRows, toRow, formatCount } from "../lib.js";
+import {
+  parseDuration, research, summarize, sortRows, toRow, formatCount,
+  fetchChannelDetail, summarizeChannel, bucketViews, niceTicks,
+} from "../lib.js";
 
 test("parseDuration", () => {
   assert.equal(parseDuration("PT45S"), 45);
@@ -101,4 +104,98 @@ test("formatCount", () => {
   assert.equal(formatCount(2070), "2070");
   assert.equal(formatCount(172000), "17.2万");
   assert.equal(formatCount(57790000), "5779万");
+});
+
+const NOW = new Date("2026-09-30T12:00:00Z");
+const ago = (h) => new Date(NOW.getTime() - h * 3600000).toISOString();
+
+function detailFetch({ playlist, videos, subs = "2070" }) {
+  const calls = [];
+  const fn = async (url) => {
+    const u = new URL(url);
+    const path = u.pathname.split("/").pop();
+    calls.push(path);
+    const json = (body) => ({ ok: true, status: 200, json: async () => body });
+    if (path === "channels")
+      return json({ items: [{ id: "A", snippet: { title: "チャンネルA" }, statistics: { subscriberCount: subs, videoCount: "44" }, contentDetails: { relatedPlaylists: { uploads: "UUA" } } }] });
+    if (path === "playlistItems") {
+      const start = Number(u.searchParams.get("pageToken") || 0);
+      const slice = playlist.slice(start, start + 2);
+      return json({
+        items: slice.map((p) => ({ contentDetails: { videoId: p.id, videoPublishedAt: p.at } })),
+        nextPageToken: start + 2 < playlist.length ? String(start + 2) : undefined,
+      });
+    }
+    if (path === "videos") {
+      const ids = u.searchParams.get("id").split(",");
+      return json({ items: videos.filter((v) => ids.includes(v.id)) });
+    }
+    throw new Error(`unexpected ${path}`);
+  };
+  fn.calls = calls;
+  return fn;
+}
+
+const dv = (id, at, views, duration = "PT30S") => ({
+  id,
+  snippet: { title: id, channelId: "A", channelTitle: "チャンネルA", publishedAt: at, thumbnails: {} },
+  contentDetails: { duration },
+  statistics: { viewCount: String(views), likeCount: String(views / 100) },
+});
+
+test("fetchChannelDetail stops at the period cutoff and filters by duration", async () => {
+  const playlist = [
+    { id: "n1", at: ago(1) },
+    { id: "n2", at: ago(48) },
+    { id: "n3", at: ago(24 * 10) },
+    { id: "old", at: ago(24 * 40) },
+    { id: "older", at: ago(24 * 50) },
+  ];
+  const videos = [dv("n1", ago(1), 1000), dv("n2", ago(48), 3000, "PT5M"), dv("n3", ago(24 * 10), 2000)];
+  const f = detailFetch({ playlist, videos });
+  const { channel, rows, quotaUnits } = await fetchChannelDetail({ key: "k", channelId: "A", days: 30, maxSeconds: 60 }, f, () => {}, NOW);
+  assert.deepEqual(rows.map((r) => r.id), ["n1", "n3"]);
+  assert.equal(channel.subscribers, 2070);
+  assert.equal(f.calls.filter((c) => c === "playlistItems").length, 2);
+  assert.equal(quotaUnits, 1 + 2 + 1);
+});
+
+test("fetchChannelDetail rejects an unknown channel", async () => {
+  const f = async () => ({ ok: true, status: 200, json: async () => ({ items: [] }) });
+  await assert.rejects(fetchChannelDetail({ key: "k", channelId: "X", days: 30, maxSeconds: 60 }, f, () => {}, NOW), /チャンネルが見つかりません/);
+});
+
+test("summarizeChannel", () => {
+  const rows = [toRow(dv("a", ago(1), 1000), { statistics: { subscriberCount: "100" } }), toRow(dv("b", ago(2), 3000), { statistics: { subscriberCount: "100" } })];
+  const s = summarizeChannel(rows, 100, 30);
+  assert.equal(s.count, 2);
+  assert.equal(s.avgViews, 2000);
+  assert.equal(s.multiplier, 20);
+  assert.ok(Math.abs(s.perWeek - 2 / (30 / 7)) < 1e-9);
+  assert.ok(Math.abs(s.avgLikeRatio - 0.01) < 1e-9);
+  assert.equal(summarizeChannel([], null, 30).multiplier, null);
+});
+
+test("bucketViews places videos by age and drops out-of-range ones", () => {
+  const rows = [
+    toRow(dv("today", ago(6), 500), { statistics: {} }),
+    toRow(dv("today2", ago(3), 100), { statistics: {} }),
+    toRow(dv("d2", ago(30), 200), { statistics: {} }),
+    toRow(dv("far", ago(24 * 31), 999), { statistics: {} }),
+  ];
+  const b = bucketViews(rows, 30, NOW);
+  assert.equal(b.length, 30);
+  assert.equal(b[29].views, 600);
+  assert.equal(b[29].count, 2);
+  assert.equal(b[28].views, 200);
+  assert.equal(b.reduce((a, x) => a + x.views, 0), 800);
+  assert.equal(b[29].label, "09/30");
+  assert.equal(bucketViews([], 365, NOW).length, 53);
+});
+
+test("niceTicks", () => {
+  assert.deepEqual(niceTicks(100), [0, 25, 50, 75, 100]);
+  assert.deepEqual(niceTicks(0), [0, 1]);
+  const t = niceTicks(730000);
+  assert.ok(t[t.length - 1] >= 730000 && t[0] === 0);
 });

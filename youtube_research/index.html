@@ -41,6 +41,14 @@
   .inline { display:flex; align-items:center; gap:6px; }
   .inline input { width:auto; }
   [hidden] { display:none !important; }
+  h2 { font-size:18px; margin:12px 0 4px; overflow-wrap:anywhere; }
+  .linkish { background:none; border:0; padding:0; color:var(--accent); font:inherit; font-weight:400; text-align:left; cursor:pointer; }
+  .linkish:hover { text-decoration:underline; }
+  .ghost { background:transparent; color:var(--accent); border:1px solid var(--line); }
+  #chart svg { width:100%; height:auto; display:block; }
+  .toplist { margin:0; padding-left:22px; display:grid; gap:6px; }
+  .toplist li { overflow-wrap:anywhere; }
+  .toplist .meta { color:var(--muted); font-size:12px; margin-left:6px; white-space:nowrap; }
   @media (max-width: 700px) {
     table { min-width:0; }
     thead { display:none; }
@@ -99,6 +107,28 @@
         <span class="hint" style="margin-bottom:9px">再生倍率 = 再生回数 ÷ チャンネル登録者数。</span>
       </div>
       <div class="tablewrap"><table id="table"><thead></thead><tbody></tbody></table></div>
+    </div>
+  </section>
+
+  <section id="detail" hidden>
+    <div class="card">
+      <div class="row" style="margin-top:0">
+        <button id="back" class="ghost" type="button">← 一覧へ戻る</button>
+        <a id="ytLink" href="#" target="_blank" rel="noopener noreferrer">YouTube で開く</a>
+      </div>
+      <h2 id="chTitle"></h2>
+      <div class="hint" id="chStatus"></div>
+      <div class="error" id="chError" role="alert"></div>
+      <div class="tiles" id="chTiles"></div>
+    </div>
+    <div class="card" id="chartCard" hidden>
+      <h3 style="margin:0 0 4px;font-size:15px">投稿日別の再生数</h3>
+      <div class="hint" id="chartNote"></div>
+      <div id="chart"></div>
+    </div>
+    <div class="card" id="topCard" hidden>
+      <h3 style="margin:0 0 8px;font-size:15px">再生数の多い動画</h3>
+      <ol id="topList" class="toplist"></ol>
     </div>
   </section>
 </main>
