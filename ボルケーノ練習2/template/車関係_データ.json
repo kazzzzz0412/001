@@ -2,23 +2,23 @@
   "accountName": "Paradoxia",
   "accountId": "@paradoxia.cars",
   "headline": [
-    [["600馬力","g"],["のGRヤリスが",""]],
-    [["812","g"],["に挑む。",""]]
+    [["650馬力","g"],["のバイパーが",""]],
+    [["LFA","g"],["に挑む。",""]]
   ],
   "left": {
-    "name": "TOYOTA {GR} YARIS",
-    "power": "約600",
-    "specs": [["エンジン","1.6L 3-CYL TURBO"],["最大トルク","約630 Nm"],["車重","約1,280 kg"],["駆動方式","AWD"]],
-    "priceName": "GR YARIS",
-    "price": "約2,500万円",
-    "note": "※カスタム費用込み"
+    "name": "DODGE VIPER {ACR}",
+    "power": "約650",
+    "specs": [["エンジン","8.4L V10 N/A"],["最大トルク","約800 Nm"],["車重","約1,540 kg"],["駆動方式","RWD"]],
+    "priceName": "VIPER ACR",
+    "price": "約1,600万円",
+    "note": "※北米価格を換算"
   },
   "right": {
-    "name": "FERRARI {812} SUPERFAST",
-    "power": "800",
-    "specs": [["エンジン","6.5L V12 N/A"],["最大トルク","718 Nm"],["車重","約1,630 kg"],["駆動方式","RWD"]],
-    "priceName": "FERRARI 812 SUPERFAST",
-    "price": "新車時 約5,100万円",
+    "name": "LEXUS {LFA}",
+    "power": "560",
+    "specs": [["エンジン","4.8L V10 N/A"],["最大トルク","480 Nm"],["車重","約1,480 kg"],["駆動方式","RWD"]],
+    "priceName": "LEXUS LFA",
+    "price": "新車時 3,750万円",
     "note": ""
   }
 }
