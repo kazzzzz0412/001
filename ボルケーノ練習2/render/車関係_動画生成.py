@@ -16,7 +16,38 @@
 import json, pathlib, shutil, subprocess, sys, tempfile
 
 HERE = pathlib.Path(__file__).resolve().parent
-FONT = "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf"
+
+# 字幕に使う日本語フォント。OSごとに候補を順に探す。
+# 編集指示JSONに "font" があればそれを最優先する。
+FONT_CANDIDATES = [
+    # Windows
+    "C:/Windows/Fonts/meiryob.ttc",      # メイリオ Bold
+    "C:/Windows/Fonts/YuGothB.ttc",      # 游ゴシック Bold
+    "C:/Windows/Fonts/YuGothM.ttc",
+    "C:/Windows/Fonts/msgothic.ttc",     # MS ゴシック
+    # macOS
+    "/System/Library/Fonts/ヒラギノ角ゴシック W6.ttc",
+    "/System/Library/Fonts/ヒラギノ角ゴシック W4.ttc",
+    "/Library/Fonts/Osaka.ttf",
+    # Linux
+    "/usr/share/fonts/opentype/ipafont-gothic/ipagp.ttf",
+    "/usr/share/fonts/truetype/fonts-japanese-gothic.ttf",
+    "/usr/share/fonts/opentype/noto/NotoSansCJK-Bold.ttc",
+]
+
+
+def pick_font(cfg):
+    named = cfg.get("font")
+    if named:
+        if not pathlib.Path(named).exists():
+            sys.exit(f"指定されたフォントが見つかりません: {named}")
+        return named
+    for c in FONT_CANDIDATES:
+        if pathlib.Path(c).exists():
+            return c
+    sys.exit("日本語フォントが見つかりません。\n"
+             "編集指示JSONに \"font\": \"C:/Windows/Fonts/meiryob.ttc\" のように\n"
+             "フォントファイルのパスを書いてください。")
 
 # クリップ窓（車関係_参考動画分析_01_Paradoxia.md の実測値）
 W, H = 720, 1280
@@ -56,15 +87,16 @@ def hhmmss(t):
     return s
 
 
-def render_subtitle(text, size, work, idx):
+def render_subtitle(text, size, work, idx, font_path):
     """字幕を透過PNGとして描く。
 
-    このffmpegビルドには drawtext（libfreetype）が入っていないため、
-    Pillowで描いてoverlayで重ねる。元動画の字幕（白・細い縁取り）に合わせてある。
+    ffmpeg の drawtext（libfreetype）に依存しないよう、Pillowで描いて overlay で重ねる。
+    ビルドによって drawtext がない場合があるため、この方式なら環境を選ばない。
+    元動画の字幕（白・細い縁取り）に合わせてある。
     """
     from PIL import Image, ImageDraw, ImageFont
 
-    font = ImageFont.truetype(FONT, size)
+    font = ImageFont.truetype(font_path, size)
     pad = size  # 縁取りと余白のぶん
     probe = ImageDraw.Draw(Image.new("RGBA", (1, 1)))
     box = probe.textbbox((0, 0), text, font=font, stroke_width=2)
@@ -104,13 +136,14 @@ def cut_segments(src, segments, work):
 
 def concat(paths, work):
     lst = work / "concat.txt"
-    lst.write_text("".join(f"file '{p}'\n" for p in paths), encoding="utf-8")
+    # Windows のバックスラッシュは concat デマルチプレクサが解釈できないので / に統一する
+    lst.write_text("".join(f"file '{p.as_posix()}'\n" for p in paths), encoding="utf-8")
     out = work / "joined.mp4"
     run(["-f", "concat", "-safe", "0", "-i", str(lst), "-c", "copy", str(out)])
     return out
 
 
-def compose(joined, cfg, dest, work):
+def compose(joined, cfg, dest, work, font_path):
     """黒背景に配置し、オーバーレイと字幕を乗せる。"""
     ov_a = (HERE / cfg["overlay"]).resolve()
     ov_b = cfg.get("overlay_winner")
@@ -139,7 +172,7 @@ def compose(joined, cfg, dest, work):
     size = cfg.get("subtitle_size", 19)
     n_in = 4 if ov_b else 3          # ここまでに使った入力の本数
     for i, sub in enumerate(subs):
-        png, sw, sh = render_subtitle(sub["text"], size, work, i)
+        png, sw, sh = render_subtitle(sub["text"], size, work, i, font_path)
         inputs += ["-loop", "1", "-i", str(png)]
         tag = f"s{i}"
         x = (W - sw) // 2
@@ -164,10 +197,13 @@ def main():
         sys.exit(f"元動画が見つかりません: {src}\n"
                  f"編集指示JSONの \"source\" に、ダウンロードした動画のパスを書いてください。")
 
+    font_path = pick_font(cfg)
     dest = HERE / cfg.get("output", "out.mp4")
     dest.parent.mkdir(parents=True, exist_ok=True)
     total = sum(hhmmss(s["out"]) - hhmmss(s["in"]) for s in cfg["segments"])
-    print(f"元動画: {src}\n区間: {len(cfg['segments'])}本 / 合計 {total:.1f}秒\n")
+    print(f"元動画: {src}")
+    print(f"フォント: {font_path}")
+    print(f"区間: {len(cfg['segments'])}本 / 合計 {total:.1f}秒\n")
 
     with tempfile.TemporaryDirectory() as td:
         work = pathlib.Path(td)
@@ -176,7 +212,7 @@ def main():
         print("連結中...")
         joined = concat(paths, work)
         print(f"合成中（オーバーレイ + 字幕{len(cfg.get('subtitles', []))}枚）...")
-        compose(joined, cfg, dest, work)
+        compose(joined, cfg, dest, work, font_path)
 
     print(f"\n完成: {dest}")
 
